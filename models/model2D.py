@@ -2,11 +2,15 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch_sparse import SparseTensor
 from torch_scatter import scatter_add
 from torch_geometric.nn.inits import glorot, zeros
 from torch_geometric.utils import add_self_loops, softmax
-from torch_geometric.nn import MessagePassing, global_add_pool, \
+from torch_geometric.nn import MessagePassing, GINEConv, GCNConv, GATConv, global_add_pool, \
     global_mean_pool, global_max_pool
+
+from transformers import AutoModelWithLMHead, RobertaModel
+import pdb
 
 
 num_atom_type = 120  # including the extra mask tokens
@@ -63,53 +67,53 @@ class GINConv(MessagePassing):
         return self.mlp(aggr_out)
 
 
-class GCNConv(MessagePassing):
+# class GCNConv(MessagePassing):
 
-    def __init__(self, emb_dim, aggr="add"):
-        super(GCNConv, self).__init__()
+#     def __init__(self, emb_dim, aggr="add"):
+#         super(GCNConv, self).__init__()
 
-        self.aggr = aggr
-        self.emb_dim = emb_dim
-        self.linear = nn.Linear(emb_dim, emb_dim)
-        self.edge_embedding1 = nn.Embedding(num_bond_type, emb_dim)
-        self.edge_embedding2 = nn.Embedding(num_bond_direction, emb_dim)
+#         self.aggr = aggr
+#         self.emb_dim = emb_dim
+#         self.linear = nn.Linear(emb_dim, emb_dim)
+#         self.edge_embedding1 = nn.Embedding(num_bond_type, emb_dim)
+#         self.edge_embedding2 = nn.Embedding(num_bond_direction, emb_dim)
 
-        nn.init.xavier_uniform_(self.edge_embedding1.weight.data)
-        nn.init.xavier_uniform_(self.edge_embedding2.weight.data)
+#         nn.init.xavier_uniform_(self.edge_embedding1.weight.data)
+#         nn.init.xavier_uniform_(self.edge_embedding2.weight.data)
 
-    def norm(self, edge_index, num_nodes, dtype):
-        ### assuming that self-loops have been already added in edge_index
-        edge_weight = torch.ones((edge_index.size(1),), dtype=dtype,
-                                 device=edge_index.device)
-        row, col = edge_index
-        deg = scatter_add(edge_weight, row, dim=0, dim_size=num_nodes)
-        deg_inv_sqrt = deg.pow(-0.5)
-        deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
+#     def norm(self, edge_index, num_nodes, dtype):
+#         ### assuming that self-loops have been already added in edge_index
+#         edge_weight = torch.ones((edge_index.size(1),), dtype=dtype,
+#                                  device=edge_index.device)
+#         row, col = edge_index
+#         deg = scatter_add(edge_weight, row, dim=0, dim_size=num_nodes)
+#         deg_inv_sqrt = deg.pow(-0.5)
+#         deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
 
-        return deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
+#         return deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
 
-    def forward(self, x, edge_index, edge_attr):
-        # add self loops in the edge space
-        edge_index = add_self_loops(edge_index, num_nodes=x.size(0))
+#     def forward(self, x, edge_index, edge_attr):
+#         # add self loops in the edge space
+#         edge_index = add_self_loops(edge_index, num_nodes=x.size(0))
 
-        # add features corresponding to self-loop edges.
-        self_loop_attr = torch.zeros(x.size(0), 2)
-        self_loop_attr[:, 0] = 4  # bond type for self-loop edge
-        self_loop_attr = self_loop_attr.to(edge_attr.device).to(edge_attr.dtype)
+#         # add features corresponding to self-loop edges.
+#         self_loop_attr = torch.zeros(x.size(0), 2)
+#         self_loop_attr[:, 0] = 4  # bond type for self-loop edge
+#         self_loop_attr = self_loop_attr.to(edge_attr.device).to(edge_attr.dtype)
 
-        edge_attr = torch.cat((edge_attr, self_loop_attr), dim=0)
-        edge_embeddings = self.edge_embedding1(edge_attr[:, 0]) + \
-                          self.edge_embedding2(edge_attr[:, 1])
+#         edge_attr = torch.cat((edge_attr, self_loop_attr), dim=0)
+#         edge_embeddings = self.edge_embedding1(edge_attr[:, 0]) + \
+#                           self.edge_embedding2(edge_attr[:, 1])
 
-        norm = self.norm(edge_index, x.size(0), x.dtype)
+#         norm = self.norm(edge_index, x.size(0), x.dtype)
 
-        x = self.linear(x)
+#         x = self.linear(x)
 
-        return self.propagate(self.aggr, edge_index, x=x,
-                              edge_attr=edge_embeddings, norm=norm)
+#         return self.propagate(self.aggr, edge_index, x=x,
+#                               edge_attr=edge_embeddings, norm=norm)
 
-    def message(self, x_j, edge_attr, norm):
-        return norm.view(-1, 1) * (x_j + edge_attr)
+#     def message(self, x_j, edge_attr, norm):
+#         return norm.view(-1, 1) * (x_j + edge_attr)
 
 
 class GATConv(MessagePassing):
@@ -171,43 +175,43 @@ class GATConv(MessagePassing):
         return aggr_out
 
 
-class GraphSAGEConv(MessagePassing):
+# class GraphSAGEConv(MessagePassing):
 
-    def __init__(self, emb_dim, aggr="mean"):
-        super(GraphSAGEConv, self).__init__()
+#     def __init__(self, emb_dim, aggr="mean"):
+#         super(GraphSAGEConv, self).__init__()
 
-        self.emb_dim = emb_dim
-        self.linear = nn.Linear(emb_dim, emb_dim)
-        self.edge_embedding1 = nn.Embedding(num_bond_type, emb_dim)
-        self.edge_embedding2 = nn.Embedding(num_bond_direction, emb_dim)
+#         self.emb_dim = emb_dim
+#         self.linear = nn.Linear(emb_dim, emb_dim)
+#         self.edge_embedding1 = nn.Embedding(num_bond_type, emb_dim)
+#         self.edge_embedding2 = nn.Embedding(num_bond_direction, emb_dim)
 
-        nn.init.xavier_uniform_(self.edge_embedding1.weight.data)
-        nn.init.xavier_uniform_(self.edge_embedding2.weight.data)
+#         nn.init.xavier_uniform_(self.edge_embedding1.weight.data)
+#         nn.init.xavier_uniform_(self.edge_embedding2.weight.data)
 
-        self.aggr = aggr
+#         self.aggr = aggr
 
-    def forward(self, x, edge_index, edge_attr):
-        # add self loops in the edge space
-        edge_index = add_self_loops(edge_index, num_nodes=x.size(0))
+#     def forward(self, x, edge_index, edge_attr):
+#         # add self loops in the edge space
+#         edge_index = add_self_loops(edge_index, num_nodes=x.size(0))
 
-        # add features corresponding to self-loop edges.
-        self_loop_attr = torch.zeros(x.size(0), 2)
-        self_loop_attr[:, 0] = 4  # bond type for self-loop edge
-        self_loop_attr = self_loop_attr.to(edge_attr.device).to(edge_attr.dtype)
-        edge_attr = torch.cat((edge_attr, self_loop_attr), dim=0)
+#         # add features corresponding to self-loop edges.
+#         self_loop_attr = torch.zeros(x.size(0), 2)
+#         self_loop_attr[:, 0] = 4  # bond type for self-loop edge
+#         self_loop_attr = self_loop_attr.to(edge_attr.device).to(edge_attr.dtype)
+#         edge_attr = torch.cat((edge_attr, self_loop_attr), dim=0)
 
-        edge_embeddings = self.edge_embedding1(edge_attr[:, 0]) + \
-                          self.edge_embedding2(edge_attr[:, 1])
+#         edge_embeddings = self.edge_embedding1(edge_attr[:, 0]) + \
+#                           self.edge_embedding2(edge_attr[:, 1])
 
-        x = self.linear(x)
+#         x = self.linear(x)
 
-        return self.propagate(self.aggr, edge_index, x=x, edge_attr=edge_embeddings)
+#         return self.propagate(self.aggr, edge_index, x=x, edge_attr=edge_embeddings)
 
-    def message(self, x_j, edge_attr):
-        return x_j + edge_attr
+#     def message(self, x_j, edge_attr):
+#         return x_j + edge_attr
 
-    def update(self, aggr_out):
-        return F.normalize(aggr_out, p=2, dim=-1)
+#     def update(self, aggr_out):
+#         return F.normalize(aggr_out, p=2, dim=-1)
 
 
 class GNN(nn.Module):
@@ -243,13 +247,12 @@ class GNN(nn.Module):
         self.gnns = nn.ModuleList()
         for layer in range(num_layer):
             if gnn_type == "gin":
-                self.gnns.append(GINConv(emb_dim, aggr="add"))
+                self.gnns.append(GINConv(emb_dim, aggr = "add")) # default aggregation is 'add'
+                # self.gnns.append(GINEConv(nn=nn.Sequential(nn.Linear(emb_dim,emb_dim)), edge_dim=2)) # default aggregation is 'add'
             elif gnn_type == "gcn":
                 self.gnns.append(GCNConv(emb_dim))
             elif gnn_type == "gat":
                 self.gnns.append(GATConv(emb_dim))
-            elif gnn_type == "graphsage":
-                self.gnns.append(GraphSAGEConv(emb_dim))
 
         ###List of batchnorms
         self.batch_norms = nn.ModuleList()
@@ -272,7 +275,7 @@ class GNN(nn.Module):
         for layer in range(self.num_layer):
             h = self.gnns[layer](h_list[layer], edge_index, edge_attr)
             h = self.batch_norms[layer](h)
-            # h = F.dropout(F.relu(h), self.drop_ratio, training = self.training)
+
             if layer == self.num_layer - 1:
                 # remove relu for the last layer
                 h = F.dropout(h, self.drop_ratio, training=self.training)
@@ -293,6 +296,8 @@ class GNN(nn.Module):
             node_representation = torch.sum(torch.cat(h_list, dim=0), dim=0)[0]
         else:
             raise ValueError("not implemented.")
+
+        
         return node_representation
 
 class GNN_graphpred(nn.Module):
@@ -343,7 +348,7 @@ class GNN_graphpred(nn.Module):
         return
 
     def from_pretrained(self, model_file):
-        self.molecule_model.load_state_dict(torch.load(model_file))
+        self.molecule_model.load_state_dict(torch.load(model_file, map_location='cuda:0'))
         return
 
 
@@ -362,3 +367,133 @@ class GNN_graphpred(nn.Module):
         output = self.graph_pred_linear(graph_representation)
 
         return output
+
+class MLP(nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels, num_layers,
+                 dropout=.5):
+        super(MLP, self).__init__()
+        self.lins = nn.ModuleList()
+        self.bns = nn.ModuleList()
+        if num_layers == 1:
+            self.lins.append(nn.Linear(in_channels, out_channels))
+        else:
+            self.lins.append(nn.Linear(in_channels, hidden_channels))
+            self.bns.append(nn.BatchNorm1d(hidden_channels))
+            for _ in range(num_layers - 2):
+                self.lins.append(nn.Linear(hidden_channels, hidden_channels))
+                self.bns.append(nn.BatchNorm1d(hidden_channels))
+            self.lins.append(nn.Linear(hidden_channels, out_channels))
+
+        self.dropout = dropout
+
+    def reset_parameters(self):
+        for lin in self.lins:
+            lin.reset_parameters()
+        for bn in self.bns:
+            bn.reset_parameters()
+
+    def forward(self, data):
+        x = data
+        for i, lin in enumerate(self.lins[:-1]):
+            x = lin(x)
+            x = F.relu(x, inplace=True)
+            x = self.bns[i](x)
+            x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.lins[-1](x)
+        return x
+
+class roberta(nn.Module):
+    def __init__(self, hidden_channels, out_channels):
+        super(roberta, self).__init__()
+        self.model_tmp = RobertaModel.from_pretrained("seyonec/ChemBERTa-zinc-base-v1")
+        self.output_layer = MLP(768, hidden_channels, out_channels, 1)
+    
+    def forward(self, input_ids, attention_mask):
+        x = self.model_tmp(input_ids, attention_mask)
+        x = x.pooler_output
+        x = self.output_layer(x)
+
+        return x
+
+        
+class VariationalAutoEncoder(torch.nn.Module):
+    def __init__(self, emb_dim, loss, detach_target, beta=1):
+        super(VariationalAutoEncoder, self).__init__()
+        self.emb_dim = emb_dim
+        self.loss = loss
+        self.detach_target = detach_target
+        self.beta = beta
+
+        self.criterion = None
+        if loss == 'l1':
+            self.criterion = nn.L1Loss()
+        elif loss == 'l2':
+            self.criterion = nn.MSELoss()
+
+        self.fc_mu = nn.Linear(self.emb_dim, self.emb_dim)
+        self.fc_var = nn.Linear(self.emb_dim, self.emb_dim)
+
+        self.decoder = nn.Sequential(
+            nn.Linear(self.emb_dim, self.emb_dim),
+            nn.BatchNorm1d(self.emb_dim),
+            nn.ReLU(),
+            nn.Linear(self.emb_dim, self.emb_dim),
+        )
+        return
+
+    def encode(self, x):
+        mu = self.fc_mu(x)
+        log_var = self.fc_var(x)
+        return mu, log_var
+
+    def reparameterize(self, mu, log_var):
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def forward(self, x, y):
+        if self.detach_target:
+            y = y.detach()
+
+        mu, log_var = self.encode(x)
+        z = self.reparameterize(mu, log_var)
+        y_hat = self.decoder(z)
+
+        reconstruction_loss = self.criterion(y_hat, y)
+        kl_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim=1), dim=0)
+
+        loss = reconstruction_loss + self.beta * kl_loss
+
+        return loss
+
+class Multi_View_Fusion(nn.Module):
+    def __init__(self, emb_dim):
+        super(Multi_View_Fusion, self).__init__()
+        self.W = nn.Linear(emb_dim, emb_dim)
+        self.att = nn.Parameter(torch.Tensor(emb_dim, 1))
+        self.emb_dim = emb_dim
+        self.softmax = nn.Softmax(dim=1)
+        
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        glorot(self.att)
+
+    def forward(self, reprs):
+        # repr : [3, n, emb_dim] 
+        reprs = reprs.view((-1, 3, self.emb_dim)) # resize to [n, 3, emb_dim]
+        H = self.W(reprs)
+        H = torch.tanh(H)                                             # H: [n, 3, emb_dim]
+
+        H = H.view((-1, self.emb_dim))
+        logits = torch.mm(H, self.att)
+        w = self.softmax(logits.view((-1, 3, 1)))  # w: [n, 3, 1]
+        fused_repr = torch.bmm(reprs.view((-1, self.emb_dim, 3)), w).squeeze(2)    # fused_repr: [n, emb_dim]
+
+        return fused_repr
+
+
+            
+
+
+
