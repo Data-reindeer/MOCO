@@ -1,6 +1,7 @@
-
+import pdb
 import os
 import numpy as np
+import pandas as pd
 from itertools import repeat
 import torch
 from torch_geometric.data import Data, InMemoryDataset
@@ -8,17 +9,19 @@ from torch_geometric.utils import subgraph, to_networkx
 
 
 class Molecule3DMaskingDataset(InMemoryDataset):
-    def __init__(self, root, dataset, mask_ratio,
+    def __init__(self, root, dataset, mask_ratio, type_view,
                  transform=None, pre_transform=None, pre_filter=None, empty=False):
         self.root = root
         self.dataset = dataset
         self.mask_ratio = mask_ratio
+        self.type_view = type_view
 
         super(Molecule3DMaskingDataset, self).__init__(root, transform, pre_transform, pre_filter)
         self.transform, self.pre_transform, self.pre_filter = transform, pre_transform, pre_filter
 
         if not empty:
             self.data, self.slices = torch.load(self.processed_paths[0])
+        
         print('Dataset: {}\nData: {}'.format(self.dataset, self.data))
 
     def subgraph(self, data):
@@ -52,13 +55,13 @@ class Molecule3DMaskingDataset(InMemoryDataset):
         data.edge_index = edge_idx
         data.edge_attr = edge_attr
         data.x = data.x[idx_nondrop]
-        data.positions = data.positions[idx_nondrop]
+        if self.type_view == '3d':data.positions = data.positions[idx_nondrop]
         data.__num_nodes__, _ = data.x.shape
         return data
 
     def get(self, idx):
         data = Data()
-        for key in self.data.keys:
+        for key in self.data.keys:        
             item, slices = self.data[key], self.slices[key]
             s = list(repeat(slice(None), item.dim()))
             s[data.__cat_dim__(key, item)] = slice(slices[idx], slices[idx + 1])
