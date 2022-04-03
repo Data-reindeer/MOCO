@@ -2,17 +2,32 @@ from os.path import join
 import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score
+import nni
+from nni.utils import merge_parameter
+import pdb
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch_geometric.loader import DataLoader
+import torch_geometric.transforms as T
 from splitters import scaffold_split, random_split, random_scaffold_split
 
 from paras import args
-from datasets.molecule_datasets_plus import MoleculeDataset
+from datasets.molecule_datasets import MoleculeDataset
 from models.model2D import GNN, GNN_graphpred
 
+from torch_geometric.datasets import Planetoid
+
+
+def seed_all(seed):
+    if not seed:
+        seed = 0
+    print("[ Using Seed : ", seed, " ]")
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.cuda.manual_seed(seed)
+    np.random.seed(seed)
 
 def get_num_task(dataset):
     # Get output dimensions of different tasks
@@ -38,6 +53,7 @@ def train_general(model, device, loader, optimizer):
 
     for step, batch in enumerate(loader):
         batch = batch.to(device)
+        # pred = model(batch.x, batch.adj_t, batch.edge_attr, batch.batch)
         pred = model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
         y = batch.y.view(pred.shape).to(torch.float64)
 
@@ -66,6 +82,7 @@ def eval_general(model, device, loader):
     for step, batch in enumerate(loader):
         batch = batch.to(device)
         with torch.no_grad():
+            # pred = model(batch.x, batch.adj_t, batch.edge_attr, batch.batch)
             pred = model(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
     
         true = batch.y.view(pred.shape)
@@ -95,10 +112,14 @@ def eval_general(model, device, loader):
 
 
 if __name__ == '__main__':
-    torch.manual_seed(args.runseed)
-    np.random.seed(args.runseed)
-    device = torch.device('cuda:' + str(args.device)) \
-        if torch.cuda.is_available() else torch.device('cpu')
+    params = nni.get_next_parameter()
+    args = merge_parameter(args, params)
+    seed_all(args.runseed)
+
+    #device = torch.device('cuda:' + str(args.device)) \
+    #    if torch.cuda.is_available() else torch.device('cpu')
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.runseed)
 
@@ -106,6 +127,7 @@ if __name__ == '__main__':
     num_tasks = get_num_task(args.dataset)
     dataset_folder = '../datasets/molecule_datasets/'
     dataset = MoleculeDataset(dataset_folder + args.dataset, dataset=args.dataset)
+    # dataset = MoleculeDataset(dataset_folder + args.dataset, dataset=args.dataset, transform=T.ToSparseTensor())
     print(dataset)
 
     eval_metric = roc_auc_score
@@ -184,6 +206,7 @@ if __name__ == '__main__':
         test_roc_list.append(test_roc)
         test_acc_list.append(test_acc)
         print('train: {:.6f}\tval: {:.6f}\ttest: {:.6f}'.format(train_roc, val_roc, test_roc))
+        nni.report_intermediate_result(test_roc)
         print()
 
         if val_roc > best_val_roc:
@@ -201,6 +224,7 @@ if __name__ == '__main__':
                 np.savez(filename, val_target=val_target, val_pred=val_pred,
                          test_target=test_target, test_pred=test_pred)
 
+    nni.report_final_result(test_roc_list[best_val_idx])
     print('best train: {:.6f}\tval: {:.6f}\ttest: {:.6f}'.format(train_roc_list[best_val_idx], val_roc_list[best_val_idx], test_roc_list[best_val_idx]))
 
     if args.output_model_dir is not '':
