@@ -21,6 +21,9 @@ torch             1.10.2+cu113
 torch-geometric   2.0.3
 transformers      4.17.0
 rdkit             2020.09.1.0
+ase               3.22.1
+descriptastorus   2.3.0.5
+ogb               1.3.3
 ```
 
 
