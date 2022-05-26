@@ -1,7 +1,5 @@
 # Featurization Matters: A Multiview Contrastive Learning Approach for Molecular Pre-training
 
-Authors:  Yanqiao Zhu, Dingshuo Chen, Yuanqi Du, Yingze Wang, Qiang Liu, Shu Wu
-
 This repository provides the source code for the paper **Featurization Matters: A Multiview Contrastive Learning Approach for Molecular Pre-training**. Here we consider four kinds of views:
 
 - 2D Graph 
