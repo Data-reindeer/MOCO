@@ -36,6 +36,7 @@ ogb               1.3.3
 
 ```bash
 mkdir datasets
+cd datasets
 mkdir -p GEOM/raw
 mkdir -p GEOM/processed
 
