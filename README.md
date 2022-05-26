@@ -18,10 +18,10 @@ numpy             1.21.2
 networkx          2.6.3
 scikit-learn      1.0.2
 pandas            1.3.4
-python 				    3.7.11
-torch 				    1.10.2+cu113
-torch-geometric		2.0.3
-transformers		  4.17.0
+python            3.7.11
+torch             1.10.2+cu113
+torch-geometric   2.0.3
+transformers      4.17.0
 rdkit             2020.09.1.0
 ```
 
