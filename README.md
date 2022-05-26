@@ -101,6 +101,7 @@ python regression_datasets.py
 
 
 ## Experiments
+Due to different training dynamics of different view encoders, we do a hyperparameter search of the learning rates and dropout ratio for each encoder from $\{10^{-3},10^{-4},\dots,10^{-7}\}$ and $\{0, 0.3, 0.5\}$, respectively. The following command are different hyperparameter combination for classfication and regression tasks.
 
 - **Pre-training for classification**
 
