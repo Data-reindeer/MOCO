@@ -1,6 +1,6 @@
-# Featurization Matters: A Multiview Contrastive Learning Approach for Molecular Pre-training
+# Improving Molecular Pretraining with Complementary Featurizations
 
-This repository provides the source code for the paper **Featurization Matters: A Multiview Contrastive Learning Approach for Molecular Pre-training**. Here we consider four kinds of views:
+This repository provides the source code for the paper **Improving Molecular Pretraining with Complementary Featurizations**. Here we consider four kinds of views:
 
 - 2D Graph 
 - 3D Geometry
