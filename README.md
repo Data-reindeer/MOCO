@@ -96,6 +96,7 @@ python molecule_preparation.py
 ```bash
 cd src/datasets
 python regression_datasets.py
+python qm9_data.py
 ```
 
 
@@ -128,6 +129,8 @@ python pretrain_regression.py --dataset=Final_GEOM_FULL_nmol50000_nconf5 --lr=0.
 - **Fine-tune for regression**
 
 ```bash
-python finetune_regression.py --input_model_file = '../runs/Regression_models/' --lr=0.001 --gnn_lr_scale=0.1 --schnet_lr_scale=0.1 --fp_lr_scale=0.1 --mlp_lr_scale=1 --fuse_lr_scale=0.01 --dropout_ratio=0.5
+python finetune_QM9.py --input_model_file = '../runs/Regression_models/' --lr=0.001 --gnn_lr_scale=0.1 --schnet_lr_scale=0.1 --fp_lr_scale=0.1 --mlp_lr_scale=1 --fuse_lr_scale=0.01 --dropout_ratio=0.5
+
+python finetune_regression.py --input_model_file = '../runs/Regression_models/' --lr=0.001 --gnn_lr_scale=1 --schnet_lr_scale=0.1 --fp_lr_scale=0.1 --mlp_lr_scale=10 --fuse_lr_scale=0.01 --dropout_ratio=0.5
 ```
 
